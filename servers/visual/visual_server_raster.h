@@ -481,6 +481,8 @@ class VisualServerRaster : public VisualServer {
 		RID render_target;
 		RID render_target_texture;
 
+		Rect2 rt_to_screen_rect;
+
 		bool hide_scenario;
 		bool hide_canvas;
 		bool transparent_bg;
@@ -740,7 +742,10 @@ public:
 	
 	virtual void mesh_remove_surface(RID p_mesh,int p_index);
 	virtual int mesh_get_surface_count(RID p_mesh) const;
-		
+
+	virtual void mesh_set_custom_aabb(RID p_mesh,const AABB& p_aabb);
+	virtual AABB mesh_get_custom_aabb(RID p_mesh) const;
+
 
 	/* MULTIMESH API */
 
@@ -913,6 +918,7 @@ public:
 	virtual RID viewport_get_render_target_texture(RID p_viewport) const;
 	virtual void viewport_set_render_target_vflip(RID p_viewport,bool p_enable);
 	virtual bool viewport_get_render_target_vflip(RID p_viewport) const;
+	virtual void viewport_set_render_target_to_screen_rect(RID p_viewport,const Rect2& p_rect);
 
 	virtual void viewport_queue_screen_capture(RID p_viewport);
 	virtual Image viewport_get_screen_capture(RID p_viewport) const;

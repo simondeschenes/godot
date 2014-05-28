@@ -46,7 +46,9 @@ class SceneTreeEditor : public Control {
 	enum {
 		BUTTON_SUBSCENE=0,
 		BUTTON_VISIBILITY=1,
-		BUTTON_SCRIPT=2
+		BUTTON_SCRIPT=2,
+		BUTTON_LOCK=3,
+		BUTTON_GROUP=4,
 	};
 
 	Tree *tree;
@@ -109,6 +111,8 @@ public:
 	Node *get_selected();
 	void set_can_rename(bool p_can_rename) { can_rename=p_can_rename; }
 	void set_editor_selection(EditorSelection *p_selection);
+
+	void update_tree() { _update_tree(); }
 
 	SceneTreeEditor(bool p_label=true,bool p_can_rename=false, bool p_can_open_instance=false);
 	~SceneTreeEditor();

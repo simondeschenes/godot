@@ -302,6 +302,16 @@ void ImageTexture::fix_alpha_edges() {
 	}
 }
 
+void ImageTexture::premultiply_alpha() {
+
+	if (format==Image::FORMAT_RGBA /*&& !(flags&FLAG_CUBEMAP)*/) {
+
+		Image img = get_data();
+		img.premultiply_alpha();
+		set_data(img);
+	}
+}
+
 bool ImageTexture::has_alpha() const {
 
 	return ( format==Image::FORMAT_GRAYSCALE_ALPHA || format==Image::FORMAT_INDEXED_ALPHA || format==Image::FORMAT_RGBA );
@@ -386,8 +396,10 @@ void ImageTexture::_bind_methods() {
 	ObjectTypeDB::bind_method(_MD("set_lossy_storage_quality","quality"),&ImageTexture::set_lossy_storage_quality);
 	ObjectTypeDB::bind_method(_MD("get_lossy_storage_quality"),&ImageTexture::get_lossy_storage_quality);
 	ObjectTypeDB::bind_method(_MD("fix_alpha_edges"),&ImageTexture::fix_alpha_edges);
+	ObjectTypeDB::bind_method(_MD("premultiply_alpha"),&ImageTexture::premultiply_alpha);
 	ObjectTypeDB::bind_method(_MD("set_size_override","size"),&ImageTexture::set_size_override);
 	ObjectTypeDB::set_method_flags(get_type_static(),_SCS("fix_alpha_edges"),METHOD_FLAGS_DEFAULT|METHOD_FLAG_EDITOR);
+	ObjectTypeDB::set_method_flags(get_type_static(),_SCS("premultiply_alpha"),METHOD_FLAGS_DEFAULT|METHOD_FLAG_EDITOR);
 	ObjectTypeDB::bind_method(_MD("_reload_hook","rid"),&ImageTexture::_reload_hook);
 
 
@@ -648,14 +660,30 @@ uint32_t LargeTexture::get_flags() const{
 }
 
 
-void LargeTexture::add_piece(const Point2& p_offset,const Ref<Texture>& p_texture) {
+int LargeTexture::add_piece(const Point2& p_offset,const Ref<Texture>& p_texture) {
 
-	ERR_FAIL_COND(p_texture.is_null());
+	ERR_FAIL_COND_V(p_texture.is_null(), -1);
 	Piece p;
 	p.offset=p_offset;
 	p.texture=p_texture;
 	pieces.push_back(p);
+
+	return pieces.size() - 1;
 }
+
+void LargeTexture::set_piece_offset(int p_idx, const Point2& p_offset) {
+
+	ERR_FAIL_INDEX(p_idx, pieces.size());
+	pieces[p_idx].offset = p_offset;
+};
+
+void LargeTexture::set_piece_texture(int p_idx, const Ref<Texture>& p_texture) {
+
+	ERR_FAIL_INDEX(p_idx, pieces.size());
+	pieces[p_idx].texture = p_texture;
+};
+
+
 
 void LargeTexture::set_size(const Size2& p_size){
 
@@ -709,6 +737,8 @@ Ref<Texture> LargeTexture::get_piece_texture(int p_idx) const{
 void LargeTexture::_bind_methods() {
 
 	ObjectTypeDB::bind_method(_MD("add_piece","ofs","texture:Texture"),&LargeTexture::add_piece);
+	ObjectTypeDB::bind_method(_MD("set_piece_offset", "idx", "ofs"),&LargeTexture::set_piece_offset);
+	ObjectTypeDB::bind_method(_MD("set_piece_texture","idx", "texture:Texture"),&LargeTexture::set_piece_texture);
 	ObjectTypeDB::bind_method(_MD("set_size","size"),&LargeTexture::set_size);
 	ObjectTypeDB::bind_method(_MD("clear"),&LargeTexture::clear);
 

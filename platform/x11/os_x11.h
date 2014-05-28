@@ -90,7 +90,7 @@ class OS_X11 : public OS_Unix {
 	MouseMode mouse_mode;
 	Point2i center;
 	
-	void handle_key_event(XKeyEvent *p_event);
+	void handle_key_event(XKeyEvent *p_event,bool p_echo=false);
 	void process_xevents();
 	virtual void delete_main_loop();
 	IP_Unix *ip_unix;
@@ -188,6 +188,7 @@ public:
 	virtual void make_rendering_thread();
 	virtual void swap_buffers();
 
+	virtual Error shell_open(String p_uri);
 
 	virtual void set_video_mode(const VideoMode& p_video_mode,int p_screen=0);
 	virtual VideoMode get_video_mode(int p_screen=0) const;

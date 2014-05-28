@@ -6,6 +6,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.os.IBinder;
+import android.util.Log;
 
 import com.android.godot.Godot;
 import com.android.godot.GodotPaymentV3;
@@ -63,7 +64,7 @@ public class PaymentsManager {
 	    }
 	};
 	
-	public void requestPurchase(String sku){
+	public void requestPurchase(String sku, String transactionId){
 		new PurchaseTask(mService, Godot.getInstance()) {
 			
 			@Override
@@ -76,7 +77,7 @@ public class PaymentsManager {
 			protected void canceled() {
 				godotPaymentV3.callbackCancel();
 			}
-		}.purchase(sku);
+		}.purchase(sku, transactionId);
 
 	}
 
@@ -84,8 +85,27 @@ public class PaymentsManager {
 		new HandlePurchaseTask(activity){
 
 			@Override
-			protected void success(String purchaseToken, String sku) {
-				validatePurchase(purchaseToken, sku);
+			protected void success(final String sku, final String signature) {
+				new ConsumeTask(mService, activity) {
+					
+					@Override
+					protected void success(String ticket) {
+//						godotPaymentV3.callbackSuccess("");
+						Log.d("XXX", "calling success:" + signature);
+						godotPaymentV3.callbackSuccess(ticket, signature);
+					}
+					
+					@Override
+					protected void error(String message) {
+						godotPaymentV3.callbackFail();
+						
+					}
+				}.consume(sku);
+
+				
+				
+//			    godotPaymentV3.callbackSuccess(ticket);
+			    //validatePurchase(purchaseToken, sku);
 			}
 
 			@Override
@@ -98,7 +118,8 @@ public class PaymentsManager {
 			protected void canceled() {
 				godotPaymentV3.callbackCancel();
 				
-			}}.handlePurchaseRequest(resultCode, data);
+			}
+			}.handlePurchaseRequest(resultCode, data);
 	}
 	
 	public void validatePurchase(String purchaseToken, final String sku){
@@ -111,8 +132,8 @@ public class PaymentsManager {
 				new ConsumeTask(mService, activity) {
 					
 					@Override
-					protected void success() {
-						godotPaymentV3.callbackSuccess();
+					protected void success(String ticket) {
+						godotPaymentV3.callbackSuccess(ticket, null);
 						
 					}
 					
@@ -145,7 +166,5 @@ public class PaymentsManager {
 		this.godotPaymentV3 = godotPaymentV3;
 		
 	}
-
-
 }
 

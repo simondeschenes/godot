@@ -67,16 +67,25 @@ bool RenderTargetTexture::has_alpha() const{
 
 void RenderTargetTexture::set_flags(uint32_t p_flags){
 
+	ERR_FAIL_COND(!vp);
+	if (p_flags&FLAG_FILTER)
+		flags=FLAG_FILTER;
+	else
+		flags=0;
+
+	VS::get_singleton()->texture_set_flags(vp->render_target_texture_rid,flags);
 
 }
+
 uint32_t RenderTargetTexture::get_flags() const{
 
-	return 0;
+	return flags;
 }
 
 RenderTargetTexture::RenderTargetTexture(Viewport *p_vp){
 
 	vp=p_vp;
+	flags=0;
 }
 
 
@@ -86,8 +95,9 @@ void Viewport::_update_stretch_transform() {
 	if (size_override_stretch && size_override) {
 
 		stretch_transform=Matrix32();
-		stretch_transform.scale(rect.size/(size_override_size+size_override_margin*2));
-		stretch_transform.elements[2]=size_override_margin;
+		Size2 scale = rect.size/(size_override_size+size_override_margin*2);
+		stretch_transform.scale(scale);
+		stretch_transform.elements[2]=size_override_margin*scale;
 
 	} else {
 
@@ -629,7 +639,9 @@ Ref<World> Viewport::get_world() const{
 
 Ref<World> Viewport::find_world() const{
 
-	if (world.is_valid())
+	if (own_world.is_valid())
+		return own_world;
+	else if (world.is_valid())
 		return world;
 	else if (parent)
 		return parent->find_world();
@@ -716,6 +728,7 @@ void Viewport::set_as_render_target(bool p_enable){
 		render_target_texture_rid=RID();
 	}
 
+	render_target_texture->set_flags(render_target_texture->flags);
 	render_target_texture->emit_changed();
 }
 
@@ -761,13 +774,42 @@ bool Viewport::get_render_target_vflip() const{
 }
 
 
+void Viewport::set_render_target_filter(bool p_enable) {
+
+	render_target_texture->set_flags(p_enable?int(Texture::FLAG_FILTER):int(0));
+
+}
+
+bool Viewport::get_render_target_filter() const{
+
+	return (render_target_texture->get_flags()&Texture::FLAG_FILTER)!=0;
+}
+
+
+Matrix32 Viewport::_get_input_pre_xform() const {
+
+	Matrix32 pre_xf;
+	if (render_target) {
+
+		ERR_FAIL_COND_V(to_screen_rect.size.x==0,pre_xf);
+		ERR_FAIL_COND_V(to_screen_rect.size.y==0,pre_xf);
+		pre_xf.scale(rect.size/to_screen_rect.size);
+		pre_xf.elements[2]=-to_screen_rect.pos;
+	} else {
+
+		pre_xf.elements[2]=-rect.pos;
+	}
+
+	return pre_xf;
+}
+
 void Viewport::_make_input_local(InputEvent& ev) {
 
 	switch(ev.type) {
 
 		case InputEvent::MOUSE_BUTTON: {
 
-			Matrix32 ai = get_final_transform().affine_inverse();
+			Matrix32 ai = get_final_transform().affine_inverse() * _get_input_pre_xform();
 			Vector2 g = ai.xform(Vector2(ev.mouse_button.global_x,ev.mouse_button.global_y));
 			Vector2 l = ai.xform(Vector2(ev.mouse_button.x,ev.mouse_button.y));
 			ev.mouse_button.x=l.x;
@@ -778,7 +820,7 @@ void Viewport::_make_input_local(InputEvent& ev) {
 		} break;
 		case InputEvent::MOUSE_MOTION: {
 
-			Matrix32 ai = get_final_transform().affine_inverse();
+			Matrix32 ai = get_final_transform().affine_inverse() * _get_input_pre_xform();
 			Vector2 g = ai.xform(Vector2(ev.mouse_motion.global_x,ev.mouse_motion.global_y));
 			Vector2 l = ai.xform(Vector2(ev.mouse_motion.x,ev.mouse_motion.y));
 			Vector2 r = ai.xform(Vector2(ev.mouse_motion.relative_x,ev.mouse_motion.relative_y));
@@ -792,7 +834,7 @@ void Viewport::_make_input_local(InputEvent& ev) {
 		} break;
 		case InputEvent::SCREEN_TOUCH: {
 
-			Matrix32 ai = get_final_transform().affine_inverse();
+			Matrix32 ai = get_final_transform().affine_inverse() * _get_input_pre_xform();
 			Vector2 t = ai.xform(Vector2(ev.screen_touch.x,ev.screen_touch.y));
 			ev.screen_touch.x=t.x;
 			ev.screen_touch.y=t.y;
@@ -800,7 +842,7 @@ void Viewport::_make_input_local(InputEvent& ev) {
 		} break;
 		case InputEvent::SCREEN_DRAG: {
 
-			Matrix32 ai = get_final_transform().affine_inverse();
+			Matrix32 ai = get_final_transform().affine_inverse() * _get_input_pre_xform();
 			Vector2 t = ai.xform(Vector2(ev.screen_drag.x,ev.screen_drag.y));
 			Vector2 r = ai.xform(Vector2(ev.screen_drag.relative_x,ev.screen_drag.relative_y));
 			Vector2 s = ai.xform(Vector2(ev.screen_drag.speed_x,ev.screen_drag.speed_y));
@@ -818,13 +860,13 @@ void Viewport::_make_input_local(InputEvent& ev) {
 
 void Viewport::_vp_input(const InputEvent& p_ev) {
 
-	if (render_target)
+	if (render_target && to_screen_rect==Rect2())
 		return; //if render target, can't get input events
 
 	//this one handles system input, p_ev are in system coordinates
 	//they are converted to viewport coordinates
 
-	InputEvent ev = p_ev;
+	InputEvent ev = p_ev;	
 	_make_input_local(ev);
 	input(ev);
 
@@ -861,6 +903,60 @@ void Viewport::unhandled_input(const InputEvent& p_event) {
 		get_scene()->_call_input_pause(unhandled_key_input_group,"_unhandled_key_input",p_event);
 		//call_group(GROUP_CALL_REVERSE|GROUP_CALL_REALTIME|GROUP_CALL_MULIILEVEL,"unhandled_key_input","_unhandled_key_input",ev);
 	}
+}
+
+void Viewport::set_use_own_world(bool p_world) {
+
+	if (p_world==own_world.is_valid())
+		return;
+
+
+	if (is_inside_scene())
+		_propagate_exit_world(this);
+
+#ifndef _3D_DISABLED
+	if (find_world().is_valid() && camera)
+		camera->notification(Camera::NOTIFICATION_LOST_CURRENT);
+#endif
+
+	if (!p_world)
+		own_world=Ref<World>();
+	else
+		own_world=Ref<World>( memnew( World ));
+
+	if (is_inside_scene())
+		_propagate_enter_world(this);
+
+#ifndef _3D_DISABLED
+	if (find_world().is_valid() && camera)
+		camera->notification(Camera::NOTIFICATION_BECAME_CURRENT);
+#endif
+
+	//propagate exit
+
+	if (is_inside_scene()) {
+		VisualServer::get_singleton()->viewport_set_scenario(viewport,find_world()->get_scenario());
+	}
+
+	_update_listener();
+
+
+}
+
+bool Viewport::is_using_own_world() const {
+
+	return own_world.is_valid();
+}
+
+void Viewport::set_render_target_to_screen_rect(const Rect2& p_rect) {
+
+	to_screen_rect=p_rect;
+	VisualServer::get_singleton()->viewport_set_render_target_to_screen_rect(viewport,to_screen_rect);
+}
+
+Rect2 Viewport::get_render_target_to_screen_rect() const{
+
+	return to_screen_rect;
 }
 
 
@@ -907,6 +1003,9 @@ void Viewport::_bind_methods() {
 	ObjectTypeDB::bind_method(_MD("set_render_target_vflip","enable"), &Viewport::set_render_target_vflip);
 	ObjectTypeDB::bind_method(_MD("get_render_target_vflip"), &Viewport::get_render_target_vflip);
 
+	ObjectTypeDB::bind_method(_MD("set_render_target_filter","enable"), &Viewport::set_render_target_filter);
+	ObjectTypeDB::bind_method(_MD("get_render_target_filter"), &Viewport::get_render_target_filter);
+
 	ObjectTypeDB::bind_method(_MD("set_render_target_update_mode","mode"), &Viewport::set_render_target_update_mode);
 	ObjectTypeDB::bind_method(_MD("get_render_target_update_mode"), &Viewport::get_render_target_update_mode);
 
@@ -918,20 +1017,26 @@ void Viewport::_bind_methods() {
 
 	ObjectTypeDB::bind_method(_MD("update_worlds"), &Viewport::update_worlds);
 
+	ObjectTypeDB::bind_method(_MD("set_use_own_world","enable"), &Viewport::set_use_own_world);
+	ObjectTypeDB::bind_method(_MD("is_using_own_world"), &Viewport::is_using_own_world);
+
 
 	ObjectTypeDB::bind_method(_MD("set_as_audio_listener","enable"), &Viewport::set_as_audio_listener);
 	ObjectTypeDB::bind_method(_MD("is_audio_listener","enable"), &Viewport::is_audio_listener);
 
 	ObjectTypeDB::bind_method(_MD("set_as_audio_listener_2d","enable"), &Viewport::set_as_audio_listener_2d);
 	ObjectTypeDB::bind_method(_MD("is_audio_listener_2d","enable"), &Viewport::is_audio_listener_2d);
+	ObjectTypeDB::bind_method(_MD("set_render_target_to_screen_rect"), &Viewport::set_render_target_to_screen_rect);
 
 
 	ADD_PROPERTY( PropertyInfo(Variant::RECT2,"rect"), _SCS("set_rect"), _SCS("get_rect") );
+	ADD_PROPERTY( PropertyInfo(Variant::BOOL,"own_world"), _SCS("set_use_own_world"), _SCS("is_using_own_world") );
 	ADD_PROPERTY( PropertyInfo(Variant::OBJECT,"world",PROPERTY_HINT_RESOURCE_TYPE,"World"), _SCS("set_world"), _SCS("get_world") );
 //	ADD_PROPERTY( PropertyInfo(Variant::OBJECT,"world_2d",PROPERTY_HINT_RESOURCE_TYPE,"World2D"), _SCS("set_world_2d"), _SCS("get_world_2d") );
 	ADD_PROPERTY( PropertyInfo(Variant::BOOL,"transparent_bg"), _SCS("set_transparent_background"), _SCS("has_transparent_background") );
 	ADD_PROPERTY( PropertyInfo(Variant::BOOL,"render_target/enabled"), _SCS("set_as_render_target"), _SCS("is_set_as_render_target") );
 	ADD_PROPERTY( PropertyInfo(Variant::BOOL,"render_target/v_flip"), _SCS("set_render_target_vflip"), _SCS("get_render_target_vflip") );
+	ADD_PROPERTY( PropertyInfo(Variant::BOOL,"render_target/filter"), _SCS("set_render_target_filter"), _SCS("get_render_target_filter") );
 	ADD_PROPERTY( PropertyInfo(Variant::INT,"render_target/update_mode",PROPERTY_HINT_ENUM,"Disabled,Once,When Visible,Always"), _SCS("set_render_target_update_mode"), _SCS("get_render_target_update_mode") );
 	ADD_PROPERTY( PropertyInfo(Variant::BOOL,"audio_listener/enable_2d"), _SCS("set_as_audio_listener_2d"), _SCS("is_audio_listener_2d") );
 	ADD_PROPERTY( PropertyInfo(Variant::BOOL,"audio_listener/enable_3d"), _SCS("set_as_audio_listener"), _SCS("is_audio_listener") );
@@ -968,6 +1073,7 @@ Viewport::Viewport() {
 	render_target_vflip=false;
 	render_target_update_mode=RENDER_TARGET_UPDATE_WHEN_VISIBLE;
 	render_target_texture = Ref<RenderTargetTexture>( memnew( RenderTargetTexture(this) ) );
+
 
 	String id=itos(get_instance_ID());
 	input_group = "_vp_input"+id;

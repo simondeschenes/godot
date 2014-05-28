@@ -1982,6 +1982,9 @@ AABB RasterizerGLES1::mesh_get_aabb(RID p_mesh) const {
 	Mesh *mesh = mesh_owner.get( p_mesh );
 	ERR_FAIL_COND_V(!mesh,AABB());
 
+	if (mesh->custom_aabb!=AABB())
+		return mesh->custom_aabb;
+
 	AABB aabb;
 
 	for (int i=0;i<mesh->surfaces.size();i++) {
@@ -1994,6 +1997,24 @@ AABB RasterizerGLES1::mesh_get_aabb(RID p_mesh) const {
 
 	return aabb;
 }
+
+void RasterizerGLES1::mesh_set_custom_aabb(RID p_mesh,const AABB& p_aabb) {
+
+	Mesh *mesh = mesh_owner.get( p_mesh );
+	ERR_FAIL_COND(!mesh);
+
+	mesh->custom_aabb=p_aabb;
+
+}
+
+AABB RasterizerGLES1::mesh_get_custom_aabb(RID p_mesh) const {
+
+	const Mesh *mesh = mesh_owner.get( p_mesh );
+	ERR_FAIL_COND_V(!mesh,AABB());
+
+	return mesh->custom_aabb;
+}
+
 
 /* MULTIMESH API */
 
@@ -4602,6 +4623,12 @@ void RasterizerGLES1::canvas_begin() {
 
 
 }
+
+void RasterizerGLES1::canvas_disable_blending() {
+
+	glDisable(GL_BLEND);
+}
+
 void RasterizerGLES1::canvas_set_opacity(float p_opacity) {
 
 	canvas_opacity = p_opacity;

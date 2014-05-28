@@ -45,6 +45,7 @@ class RenderTargetTexture : public Texture {
 
 	OBJ_TYPE( RenderTargetTexture, Texture );
 
+	int flags;
 friend class Viewport;
 	Viewport *vp;
 
@@ -101,6 +102,7 @@ friend class RenderTargetTexture;
 	Matrix32 stretch_transform;
 
 	Rect2 rect;
+	Rect2 to_screen_rect;
 
 
 	bool size_override;
@@ -111,6 +113,7 @@ friend class RenderTargetTexture;
 
 	bool transparent_bg;
 	bool render_target_vflip;
+	bool render_target_filter;
 
 	void _update_rect();
 
@@ -120,6 +123,7 @@ friend class RenderTargetTexture;
 
 	Ref<World2D> world_2d;
 	Ref<World> world;
+	Ref<World> own_world;
 
 	StringName input_group;
 	StringName gui_input_group;
@@ -144,6 +148,7 @@ friend class RenderTargetTexture;
 
 	void update_worlds();
 
+	_FORCE_INLINE_ Matrix32 _get_input_pre_xform() const;
 
 	void _vp_enter_scene();
 	void _vp_exit_scene();
@@ -206,6 +211,9 @@ public:
 	void set_render_target_vflip(bool p_enable);
 	bool get_render_target_vflip() const;
 
+	void set_render_target_filter(bool p_enable);
+	bool get_render_target_filter() const;
+
 	void set_render_target_update_mode(RenderTargetUpdateMode p_mode);
 	RenderTargetUpdateMode get_render_target_update_mode() const;
 	Ref<RenderTargetTexture> get_render_target_texture() const;
@@ -213,8 +221,14 @@ public:
 	void queue_screen_capture();
 	Image get_screen_capture() const;
 
+	void set_use_own_world(bool p_world);
+	bool is_using_own_world() const;
+
 	void input(const InputEvent& p_event);
 	void unhandled_input(const InputEvent& p_event);
+
+	void set_render_target_to_screen_rect(const Rect2& p_rect);
+	Rect2 get_render_target_to_screen_rect() const;
 
 	Viewport();	
 	~Viewport();

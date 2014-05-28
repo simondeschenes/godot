@@ -652,6 +652,22 @@ uint32_t Physics2DServerSW::body_get_object_instance_ID(RID p_body) const {
 	return body->get_instance_id();
 };
 
+void Physics2DServerSW::body_set_layer_mask(RID p_body, uint32_t p_flags) {
+
+	Body2DSW *body = body_owner.get(p_body);
+	ERR_FAIL_COND(!body);
+	body->set_layer_mask(p_flags);
+
+};
+
+uint32_t Physics2DServerSW::body_get_layer_mask(RID p_body, uint32_t p_flags) const {
+
+	Body2DSW *body = body_owner.get(p_body);
+	ERR_FAIL_COND_V(!body,0);
+
+	return body->get_layer_mask();
+};
+
 
 void Physics2DServerSW::body_set_user_mask(RID p_body, uint32_t p_flags) {
 
@@ -770,7 +786,7 @@ void Physics2DServerSW::body_remove_collision_exception(RID p_body, RID p_body_b
 	Body2DSW *body = body_owner.get(p_body);
 	ERR_FAIL_COND(!body);
 
-	body->remove_exception(p_body);
+	body->remove_exception(p_body_b);
 
 };
 

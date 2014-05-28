@@ -587,6 +587,23 @@ AABB RasterizerDummy::mesh_get_aabb(RID p_mesh) const {
 	return aabb;
 }
 
+void RasterizerDummy::mesh_set_custom_aabb(RID p_mesh,const AABB& p_aabb) {
+
+	Mesh *mesh = mesh_owner.get( p_mesh );
+	ERR_FAIL_COND(!mesh);
+
+	mesh->custom_aabb=p_aabb;
+}
+
+AABB RasterizerDummy::mesh_get_custom_aabb(RID p_mesh) const {
+
+	const Mesh *mesh = mesh_owner.get( p_mesh );
+	ERR_FAIL_COND_V(!mesh,AABB());
+
+	return mesh->custom_aabb;
+
+}
+
 /* MULTIMESH API */
 
 RID RasterizerDummy::multimesh_create() {
@@ -1384,7 +1401,7 @@ void RasterizerDummy::set_viewport(const VS::ViewportRect& p_viewport) {
 
 }
 
-void RasterizerDummy::set_render_target(RID p_render_target,bool p_transparent_bg) {
+void RasterizerDummy::set_render_target(RID p_render_target, bool p_transparent_bg, bool p_vflip) {
 
 
 }
@@ -1455,6 +1472,12 @@ void RasterizerDummy::canvas_begin() {
 
 
 }
+void RasterizerDummy::canvas_disable_blending() {
+
+
+
+}
+
 void RasterizerDummy::canvas_set_opacity(float p_opacity) {
 
 

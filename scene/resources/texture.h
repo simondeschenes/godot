@@ -143,6 +143,7 @@ public:
 	float get_lossy_storage_quality() const;
 
 	void fix_alpha_edges();
+	void premultiply_alpha();
 
 	void set_size_override(const Size2& p_size);
 
@@ -225,7 +226,10 @@ public:
 	virtual void set_flags(uint32_t p_flags);
 	virtual uint32_t get_flags() const;
 
-	void add_piece(const Point2& p_offset,const Ref<Texture>& p_texture);
+	int add_piece(const Point2& p_offset,const Ref<Texture>& p_texture);
+	void set_piece_offset(int p_idx, const Point2& p_offset);
+	void set_piece_texture(int p_idx, const Ref<Texture>& p_texture);
+
 	void set_size(const Size2& p_size);
 	void clear();
 

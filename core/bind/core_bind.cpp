@@ -4,6 +4,7 @@
 #include "io/marshalls.h"
 #include "io/base64.h"
 #include "core/globals.h"
+#include "io/file_access_encrypted.h"
 
 _ResourceLoader *_ResourceLoader::singleton=NULL;
 
@@ -97,6 +98,13 @@ void _ResourceSaver::_bind_methods() {
 
 	ObjectTypeDB::bind_method(_MD("save","path","resource:Resource"),&_ResourceSaver::save, DEFVAL(0));
 	ObjectTypeDB::bind_method(_MD("get_recognized_extensions","type"),&_ResourceSaver::get_recognized_extensions);
+
+	BIND_CONSTANT(FLAG_RELATIVE_PATHS);
+	BIND_CONSTANT(FLAG_BUNDLE_RESOURCES);
+	BIND_CONSTANT(FLAG_CHANGE_PATH);
+	BIND_CONSTANT(FLAG_OMIT_EDITOR_PROPERTIES);
+	BIND_CONSTANT(FLAG_SAVE_BIG_ENDIAN);
+	BIND_CONSTANT(FLAG_COMPRESS);
 }
 
 _ResourceSaver::_ResourceSaver() {
@@ -478,10 +486,54 @@ void _OS::print_all_textures_by_size() {
 		print_line(E->get().path+" - "+String::humanize_size(E->get().vram)+"  ("+E->get().size+") - total:"+String::humanize_size(total) );
 		total-=E->get().vram;
 	}
-
-
-
 }
+
+void _OS::print_resources_by_type(const Vector<String>& p_types) {
+
+	Map<String,int> type_count;
+
+	List<Ref<Resource> > resources;
+	ResourceCache::get_cached_resources(&resources);
+
+	List<Ref<Resource> > rsrc;
+	ResourceCache::get_cached_resources(&rsrc);
+
+	for (List<Ref<Resource> >::Element *E=rsrc.front();E;E=E->next()) {
+
+		Ref<Resource> r = E->get();
+
+		bool found = false;
+
+		for (int i=0; i<p_types.size(); i++) {
+			if (r->is_type(p_types[i]))
+				found = true;
+		}
+		if (!found)
+			continue;
+
+		if (!type_count.has(r->get_type())) {
+			type_count[r->get_type()]=0;
+		}
+
+
+		type_count[r->get_type()]++;
+
+		print_line(r->get_type()+": "+r->get_path());
+
+		List<String> metas;
+		r->get_meta_list(&metas);
+		for (List<String>::Element* me = metas.front(); me; me = me->next()) {
+			print_line(" "+String(me->get()) + ": " + r->get_meta(me->get()));
+		};
+	}
+
+	for(Map<String,int>::Element *E=type_count.front();E;E=E->next()) {
+
+		print_line(E->key()+" count: "+itos(E->get()));
+	}
+
+};
+
 
 void _OS::print_all_resources(const String& p_to_file ) {
 
@@ -508,9 +560,9 @@ float _OS::get_frames_per_second() const {
 	return OS::get_singleton()->get_frames_per_second();
 }
 
-Error _OS::native_video_play(String p_path) {
+Error _OS::native_video_play(String p_path, float p_volume) {
 
-	return OS::get_singleton()->native_video_play(p_path);
+	return OS::get_singleton()->native_video_play(p_path, p_volume);
 };
 
 bool _OS::native_video_is_playing() {
@@ -613,6 +665,7 @@ void _OS::_bind_methods() {
 	ObjectTypeDB::bind_method(_MD("get_frames_per_second"),&_OS::get_frames_per_second);
 
 	ObjectTypeDB::bind_method(_MD("print_all_textures_by_size"),&_OS::print_all_textures_by_size);
+	ObjectTypeDB::bind_method(_MD("print_resources_by_type"),&_OS::print_resources_by_type);
 
 	ObjectTypeDB::bind_method(_MD("native_video_play"),&_OS::native_video_play);
 	ObjectTypeDB::bind_method(_MD("native_video_is_playing"),&_OS::native_video_is_playing);
@@ -810,6 +863,44 @@ _Geometry::_Geometry() {
 
 
 ///////////////////////// FILE
+
+
+
+Error _File::open_encrypted(const String& p_path, int p_mode_flags,const Vector<uint8_t>& p_key) {
+
+	Error err = open(p_path,p_mode_flags);
+	if (err)
+		return err;
+
+	FileAccessEncrypted *fae = memnew( FileAccessEncrypted );
+	err = fae->open_and_parse(f,p_key,(p_mode_flags==WRITE)?FileAccessEncrypted::MODE_WRITE_AES256:FileAccessEncrypted::MODE_READ);
+	if (err) {
+		memdelete(fae);
+		close();
+		return err;
+	}
+	f=fae;
+	return OK;
+}
+
+Error _File::open_encrypted_pass(const String& p_path, int p_mode_flags,const String& p_pass) {
+
+	Error err = open(p_path,p_mode_flags);
+	if (err)
+		return err;
+
+	FileAccessEncrypted *fae = memnew( FileAccessEncrypted );
+	err = fae->open_and_parse_password(f,p_pass,(p_mode_flags==WRITE)?FileAccessEncrypted::MODE_WRITE_AES256:FileAccessEncrypted::MODE_READ);
+	if (err) {
+		memdelete(fae);
+		close();
+		return err;
+	}
+
+	f=fae;
+	return OK;
+
+}
 
 
 Error _File::open(const String& p_path, int p_mode_flags) {
@@ -1112,6 +1203,10 @@ Variant _File::get_var() const {
 }
 
 void _File::_bind_methods() {
+
+
+	ObjectTypeDB::bind_method(_MD("open_encrypted","path","mode_flags","key"),&_File::open_encrypted);
+	ObjectTypeDB::bind_method(_MD("open_encrypted_with_pass","path","mode_flags","pass"),&_File::open_encrypted_pass);
 
 	ObjectTypeDB::bind_method(_MD("open","path","flags"),&_File::open);
 	ObjectTypeDB::bind_method(_MD("close"),&_File::close);

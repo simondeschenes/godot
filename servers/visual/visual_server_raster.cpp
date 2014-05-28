@@ -434,6 +434,21 @@ int VisualServerRaster::mesh_get_surface_count(RID p_mesh) const{
 
 }
 
+
+void VisualServerRaster::mesh_set_custom_aabb(RID p_mesh,const AABB& p_aabb) {
+
+	VS_CHANGED;
+	_dependency_queue_update(p_mesh,true);
+	rasterizer->mesh_set_custom_aabb(p_mesh,p_aabb);
+
+}
+
+AABB VisualServerRaster::mesh_get_custom_aabb(RID p_mesh) const {
+
+	return rasterizer->mesh_get_custom_aabb(p_mesh);
+}
+
+
 /* MULTIMESH */
 
 RID VisualServerRaster::multimesh_create() {
@@ -1111,12 +1126,12 @@ void VisualServerRaster::viewport_set_render_target_update_mode(RID p_viewport,R
 	Viewport *viewport = viewport_owner.get( p_viewport );
 	ERR_FAIL_COND(!viewport);
 
-	if (viewport->update_list.in_list())
+	if (viewport->render_target.is_valid() && viewport->update_list.in_list())
 		viewport_update_list.remove(&viewport->update_list);
 
 	viewport->render_target_update_mode=p_mode;
 
-	if (viewport->render_target_update_mode!=RENDER_TARGET_UPDATE_DISABLED)
+	if (viewport->render_target.is_valid() &&viewport->render_target_update_mode!=RENDER_TARGET_UPDATE_DISABLED)
 		viewport_update_list.add(&viewport->update_list);
 
 }
@@ -1142,6 +1157,15 @@ void VisualServerRaster::viewport_set_render_target_vflip(RID p_viewport,bool p_
 	ERR_FAIL_COND(!viewport);
 
 	viewport->render_target_vflip=p_enable;
+
+}
+
+void VisualServerRaster::viewport_set_render_target_to_screen_rect(RID p_viewport,const Rect2& p_rect) {
+
+	Viewport *viewport = viewport_owner.get( p_viewport );
+	ERR_FAIL_COND(!viewport);
+
+	viewport->rt_to_screen_rect=p_rect;
 
 }
 
@@ -5458,6 +5482,8 @@ void VisualServerRaster::_draw_viewport(Viewport *p_viewport,int p_ofs_x, int p_
 void VisualServerRaster::_draw_viewports() {
 
 	//draw viewports for render targets
+
+	List<Viewport*> to_blit;
 	List<Viewport*> to_disable;
 	for(SelfList<Viewport> *E=viewport_update_list.first();E;E=E->next()) {
 
@@ -5471,6 +5497,9 @@ void VisualServerRaster::_draw_viewports() {
 
 			continue;
 		}
+
+		if (vp->rt_to_screen_rect!=Rect2())
+			to_blit.push_back(vp);
 
 		rasterizer->set_render_target(vp->render_target,vp->transparent_bg,vp->render_target_vflip);
 		_draw_viewport(vp,0,0,vp->rect.width,vp->rect.height);
@@ -5490,6 +5519,38 @@ void VisualServerRaster::_draw_viewports() {
 		viewport_update_list.remove(&to_disable.front()->get()->update_list);
 		to_disable.pop_front();
 	}
+
+
+	//draw RTs directly to screen when requested
+
+	for (List<Viewport*>::Element *E=to_blit.front();E;E=E->next()) {
+
+		int window_w = OS::get_singleton()->get_video_mode().width;
+		int window_h = OS::get_singleton()->get_video_mode().height;
+
+		ViewportRect desired_rect;
+		desired_rect.x = desired_rect.y = 0;
+		desired_rect.width = window_w;
+		desired_rect.height = window_h;
+
+		if ( viewport_rect.x != desired_rect.x ||
+			viewport_rect.y != desired_rect.y ||
+			viewport_rect.width != desired_rect.width ||
+			viewport_rect.height != desired_rect.height ) {
+
+			viewport_rect=desired_rect;
+
+			rasterizer->set_viewport(viewport_rect);
+		}
+
+		rasterizer->canvas_begin();
+		rasterizer->canvas_disable_blending();
+		rasterizer->canvas_begin_rect(Matrix32());
+		rasterizer->canvas_draw_rect(E->get()->rt_to_screen_rect,0,Rect2(Point2(),E->get()->rt_to_screen_rect.size),E->get()->render_target_texture,Color(1,1,1));
+
+	}
+
+
 
 	//draw viewports attached to screen
 
